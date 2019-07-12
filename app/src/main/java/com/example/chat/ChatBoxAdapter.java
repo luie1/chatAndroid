@@ -28,7 +28,6 @@ public class ChatBoxAdapter  extends RecyclerView.Adapter<ChatBoxAdapter.MyViewH
         }
     }
     public ChatBoxAdapter(List<Message>MessagesList) {
-
         this.MessageList = MessagesList;
 
     }

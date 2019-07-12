@@ -13,13 +13,18 @@ import android.widget.Toast;
 import com.github.nkzawa.emitter.Emitter;
 import com.github.nkzawa.socketio.client.IO;
 import com.github.nkzawa.socketio.client.Socket;
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.JsonHttpResponseHandler;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+
+import cz.msebera.android.httpclient.Header;
 
 
 public class chatBoxActivity extends AppCompatActivity {
@@ -40,14 +45,49 @@ public class chatBoxActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat_box);
 
-
         messagetxt = (EditText) findViewById(R.id.message) ;
         send = (Button)findViewById(R.id.send);
-        // get the nickame of the user
         Nickname= (String)getIntent().getExtras().getString(MainActivity.NICKNAME);
-        //connect you socket client to the server
+        MessageList = new ArrayList<>();
+        myRecylerView = (RecyclerView) findViewById(R.id.messagelist);
+        RecyclerView.LayoutManager mLayoutManager = new LinearLayoutManager(getApplicationContext());
+        myRecylerView.setLayoutManager(mLayoutManager);
+        myRecylerView.setItemAnimator(new DefaultItemAnimator());
+
+        //este es el metodo para cargar mensajes anteriores o persistentes de la bd
+        cargarMensajes();
+        //este es el metodo para poner a la escucha el chat con sockets
+        socketEscuchaEmisor();
+
+    }
+
+    private void cargarMensajes() {
+        AsyncHttpClient client=new AsyncHttpClient();
+        client.get("http://192.168.43.102:8000/mensaje",null,new JsonHttpResponseHandler(){
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
+                super.onSuccess(statusCode, headers, response);
+                for (int i=0;i<response.length();i++){
+                    try {
+                        JSONObject data=response.getJSONObject(i);
+                        String nickname = data.getString("senderNickname");
+                        String message = data.getString("message");
+                        Message m = new Message(nickname,message);
+                        MessageList.add(m);
+                        chatBoxAdapter = new ChatBoxAdapter(MessageList);
+                        chatBoxAdapter.notifyDataSetChanged();
+                        myRecylerView.setAdapter(chatBoxAdapter);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+    }
+
+    private void socketEscuchaEmisor() {
         try {
-            socket = IO.socket("http://192.168.43.101:3000");
+            socket = IO.socket("http://192.168.43.102:8000");
             socket.connect();
             socket.emit("join", Nickname);
         } catch (URISyntaxException e) {
@@ -55,19 +95,9 @@ public class chatBoxActivity extends AppCompatActivity {
 
         }
         //setting up recyler
-        MessageList = new ArrayList<>();
-        myRecylerView = (RecyclerView) findViewById(R.id.messagelist);
-        RecyclerView.LayoutManager mLayoutManager = new LinearLayoutManager(getApplicationContext());
-        myRecylerView.setLayoutManager(mLayoutManager);
-        myRecylerView.setItemAnimator(new DefaultItemAnimator());
-
-
-
-        // message send action
         send.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //retrieve the nickname and the message content and fire the event messagedetection
                 if(!messagetxt.getText().toString().isEmpty()){
                     socket.emit("messagedetection",Nickname,messagetxt.getText().toString());
 
@@ -77,8 +107,6 @@ public class chatBoxActivity extends AppCompatActivity {
 
             }
         });
-
-        //implementing socket listeners
         socket.on("userjoinedthechat", new Emitter.Listener() {
             @Override
             public void call(final Object... args) {
@@ -86,7 +114,6 @@ public class chatBoxActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         String data = (String) args[0];
-
                         Toast.makeText(chatBoxActivity.this,data,Toast.LENGTH_SHORT).show();
 
                     }
@@ -100,7 +127,6 @@ public class chatBoxActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         String data = (String) args[0];
-
                         Toast.makeText(chatBoxActivity.this,data,Toast.LENGTH_SHORT).show();
 
                     }
@@ -115,41 +141,22 @@ public class chatBoxActivity extends AppCompatActivity {
                     public void run() {
                         JSONObject data = (JSONObject) args[0];
                         try {
-                            //extract data from fired event
-
                             String nickname = data.getString("senderNickname");
                             String message = data.getString("message");
-
-                            // make instance of message
-
                             Message m = new Message(nickname,message);
-
-
-                            //add the message to the messageList
-
                             MessageList.add(m);
-
-                            // add the new updated list to the dapter
                             chatBoxAdapter = new ChatBoxAdapter(MessageList);
-
-                            // notify the adapter to update the recycler view
-
                             chatBoxAdapter.notifyDataSetChanged();
-
-                            //set the adapter for the recycler view
-
                             myRecylerView.setAdapter(chatBoxAdapter);
 
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
 
-
                     }
                 });
             }
         });
-
 
     }
 
